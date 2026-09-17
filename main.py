@@ -25,7 +25,7 @@ inngest_client = inngest.Inngest(
     fn_id="RAG: Ingest PDF",
     trigger=inngest.TriggerEvent(event="rag/ingest_pdf"),
     throttle=inngest.Throttle(
-        count=2, period=datetime.timedelta(minutes=1)
+        limit=2, period=datetime.timedelta(minutes=1)
     ),
     rate_limit=inngest.RateLimit(
         limit=1,
@@ -81,7 +81,7 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
     adapter = ai.openai.Adapter(
         auth_key= os.getenv("API_KEY"),
         base_url="https://openrouter.ai/api/v1",
-        model="openai/gpt-oss-20b:free",
+        model="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     )
 
     res = await ctx.step.ai.infer(
@@ -97,7 +97,11 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
         }
     )
 
-    answer = res["choices"][0]["message"]["content"].strip()
+    message = res["choices"][0]["message"]
+    answer = (message.get("content") or message.get("reasoning") or "").strip()
+    if not answer:
+        logging.error(f"LLM returned empty answer. Full response: {res}")
+        raise ValueError("LLM returned empty answer")
     return {"answer": answer, "sources": found["sources"], "num_contexts": len(found["contexts"])}
 
 app = FastAPI()
